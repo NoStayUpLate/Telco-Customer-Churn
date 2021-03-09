@@ -4,6 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import seaborn as sns
+import plotly.graph_objs as pltgo
+import plotly.offline as pltoff
 from sklearn import preprocessing
 from sklearn.linear_model import ElasticNetCV
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error, explained_variance_score, \
@@ -49,6 +51,22 @@ font = {
 }
 matplotlib.rc("font",**font)
 
+def Percentage(data_label,data_values_list,flag):
+    '''
+    计算各指标所占百分比
+    :param data_label:需要计算的Series
+    :param data_values_list: 各指标的数量
+    :return: 指标数量和占比的字符串 组成的列表
+    '''
+    total_value = len(data_label) if flag == 'part' else len(data_train)
+    percent_str = []
+    for data_value in data_values_list:
+        data_value_percent = data_value / total_value
+        percent = round(data_value_percent, 3)
+        str_total = str(data_value) + "(占比" + str(percent * 100) + "%" + ")"
+        percent_str.append(str_total)
+    return percent_str
+
 def Churn_yes_bar(data_label,title):
     '''
     观察 流失客户 中的主要因素
@@ -58,8 +76,12 @@ def Churn_yes_bar(data_label,title):
     '''
     data = data_label[data_train.Churn == "Yes"].value_counts()
     plt.bar(data.index,data.values)
-    for x,y in zip(data.index,data.values):
-        plt.text(x,y,s=y,ha = 'center')
+    # 计算百分比
+    num_percent_list = Percentage(data_label[data_train.Churn == "Yes"],data.values,'part')
+    Indexlen = np.arange(len(data.index))
+    # 绘制百分比数据
+    for x,y in zip(data.index,Indexlen):
+        plt.text(x,data.values[y],s = num_percent_list[y],ha = 'center')
     plt.title(title)
     plt.ylabel("客户数量")
     plt.show()
@@ -81,28 +103,22 @@ def Churn_doublebar(data_label,title):
     bar_width = 0.35
     x_label = list(data_label.value_counts().index)
     plt.bar(x,y_No,bar_width,align = 'center',label = "未流失客户")
+    # 计算百分比
+    NoNumPercentlist = Percentage(data_label[data_train.Churn == "No"],data_noChurn.values,'whole')
+    YesNumPercentlist = Percentage(data_label[data_train.Churn == "Yes"],data_yesChurn.values,'whole')
     Nolen = np.arange(len(data_noChurn.index))
     Yeslen = np.arange(len(data_noChurn.index))
-    for i,j in zip(Nolen,data_noChurn.values):
-        plt.text(Nolen[i],j,s = j,ha = 'center')
+    # 绘制百分比数据
+    for i,j in zip(Nolen,Nolen):
+        plt.text(i,y_No[j],s = NoNumPercentlist[j],ha = 'center')
     plt.bar(x + bar_width,y_Yes,bar_width,align = 'center',label = "流失客户")
-    for i,j in zip(Yeslen,data_yesChurn.values):
-        plt.text(Yeslen[i] + bar_width,j,s = j,ha = 'center')
+    for i,j in zip(Yeslen,Yeslen):
+        plt.text(i + bar_width,y_Yes[j],s = YesNumPercentlist[j],ha = 'center')
     plt.xlabel(title)
     plt.ylabel("客户数量")
     plt.xticks(x + bar_width/2,x_label)
     plt.legend(loc = 0)
     plt.show()
-
-
-# def Churn_scatter(data_label,title,x_label):
-#
-#     dummies_Churn = pd.get_dummies(data_train.Churn,prefix='Churn')
-#     df = pd.concat([data_train,dummies_Churn],axis=1)
-#     plt.scatter(dummies_Churn,data_label)
-#     plt.title(title)
-#     plt.xlabel(x_label)
-#     plt.show()
 
 # todo 观察gender的分布：性别分布均匀，客户流失 性别并不是主要影响因素
 # todo 男性：930 女性：939
@@ -158,7 +174,73 @@ def Churn_doublebar(data_label,title):
 # Churn_yes_bar(data_train.TotalCharges,"总共费用")
 # Churn_doublebar(data_train.TotalCharges,"总共费用")
 
+# 单独处理tenure
+# 将Tenure变量的值转变为分类值
+def tenure_lab(data_train):
+    if data_train['tenure'] <= 12:
+        return 'Tenure_0_12'
+    elif (data_train['tenure'] > 12) & (data_train['tenure'] <= 24):
+        return 'Tenure_12_24'
+    elif (data_train['tenure'] > 24) & (data_train['tenure'] <= 48):
+        return 'Tenure_24_48'
+    elif (data_train['tenure'] > 48) & (data_train['tenure'] <= 60):
+        return 'Tenure_48_60'
+    elif data_train['tenure'] > 60:
+        return 'Tenure_gt_60'
 
+data_train['tenure_group'] = data_train.apply(lambda data_train: tenure_lab(data_train), axis=1)
+
+# 利用散点图来研究按照tenure分组的每月开支和总开支情况
+def plot_tenure_scatter(tenure_group, color):
+    tracer = pltgo.Scatter(x = data_train[data_train['tenure_group'] == tenure_group]['MonthlyCharges'],
+                        y = data_train[data_train['tenure_group'] == tenure_group]['TotalCharges'],
+                        mode = 'markers', marker = dict(line = dict(width = 0.2, color = 'black'),
+                                                    size = 4, color = color, symbol = 'diamond-dot'),
+                        name = tenure_group, # legend名称
+                        opacity = 0.9
+                        )
+    return tracer
+
+# 利用散点图研究按照churn分组的每月开支和总开支
+def plot_churn_scatter(churn, color):
+    tracer = pltgo.Scatter(x = data_train[data_train['Churn'] == churn]['MonthlyCharges'],	# 进提取已流失客户数据
+                        y = data_train[data_train['Churn'] == churn]['TotalCharges'],	# 进提取已流失客户数据
+                        mode = 'markers', marker = dict(line = dict(width = 0.2, color = 'black'),
+                                                    size = 4, color = color, symbol = 'diamond-dot'),
+                        name = 'Churn'+churn, # legend名称
+                        opacity = 0.9)
+    return tracer
+
+trace1 = plot_tenure_scatter('Tenure_0_12', '#FF3300')
+trace2 = plot_tenure_scatter('Tenure_12_24', '#6666FF')
+trace3 = plot_tenure_scatter('Tenure_24_48', '#99FF00')
+trace4 = plot_tenure_scatter('Tenure_48_60', '#996600')
+trace5 = plot_tenure_scatter('Tenure_gt_60', 'grey')
+
+trace6 = plot_churn_scatter('Yes', 'red')
+trace7 = plot_churn_scatter('No', 'blue')
+
+data1 = [trace1, trace2, trace3, trace4, trace5]
+data2 = [trace7, trace6]
+
+# 绘制画布
+def layout_title(title):
+    layout = pltgo.Layout(dict(
+        title = title, plot_bgcolor = 'rgb(243, 243, 243)', paper_bgcolor = 'rgb(243, 243, 243)',
+        xaxis = dict(gridcolor = 'rgb(255, 255, 255)', title = 'Monthly charges',zerolinewidth = 1, ticklen = 5, gridwidth = 2),
+        yaxis = dict(gridcolor = 'rgb(255, 255, 255)', title = 'Total charges',zerolinewidth = 1, ticklen = 5, gridwidth = 2),
+        height = 600
+    ))
+    return layout
+
+layout1 = layout_title('Monthly Charges & Total Charges by Tenure group')
+layout2 = layout_title('Monthly Charges & Total Charges by Churn group')
+
+fig1 = pltgo.Figure(data = data1, layout = layout1)
+fig2 = pltgo.Figure(data = data2, layout = layout2)
+
+# pltoff.plot(fig1)
+# pltoff.plot(fig2)
 
 '''
     结论：
@@ -281,7 +363,7 @@ def Train_split(data_all,ratio_num,y_train):
 
 x_train,x_test,Y_train = Train_split(df_test,0.8,y_train)
 
-# todo 进行模型训练
+# todo 进行模型训练，并且评价回归模型的好坏
 def _ApplyLinerAlgo(model,x_train,x_test,y_train):
     model.fit(x_train,y_train)
     y_predict = model.predict(x_train)
@@ -325,6 +407,7 @@ def _ApplyLinerAlgo(model,x_train,x_test,y_train):
 # print("Pipeline:\n")
 # y_pre_Pipe = _ApplyLinerAlgo(pipeline,split_train,split_test,split_y_train)
 
+'''
 # 建立 分类模型进行预测，使用网格搜索
 # 融合两种模型
 pipe = Pipeline([('select',SelectKBest(k = 'all')),('classify',RandomForestClassifier(random_state = 10, max_features = 'auto'))])
@@ -358,16 +441,5 @@ cv_score = cross_val_score(pipeline, X, y, cv= 10)
 print("CV Score : Mean - %.7g | Std - %.7g " % (np.mean(cv_score), np.std(cv_score)))
 
 Prediction = pipeline.predict(test)
-
-
-
-
-
-
-
-
-
-
-
-
+'''
 
