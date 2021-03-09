@@ -308,7 +308,7 @@ df_test['MonthlyCharges_scaled'] = scaler.fit_transform(df_test.MonthlyCharges.v
 
 df_test.drop(['gender','customerID','PhoneService','Partner','Dependents','InternetService','OnlineSecurity','OnlineBackup','DeviceProtection',
               'TechSupport','Contract','PaperlessBilling','PaymentMethod','StreamingTV','StreamingMovies',
-              'TotalCharges','MultipleLines'],axis = 1,inplace = True)
+              'TotalCharges','MultipleLines','tenure_group'],axis = 1,inplace = True)
 # print(df_test.info())
 df_test1 = df_test
 
